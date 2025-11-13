@@ -1,0 +1,47 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String   @id @default(uuid()) @db.Uuid
+  twitterId             String   @unique @map("twitter_id")
+  userName              String   @unique @map("user_name")
+  name                  String
+  url                   String?
+  isBlueVerified        Boolean  @default(false) @map("is_blue_verified")
+  verifiedType          String?  @map("verified_type")
+  profilePicture        String?  @map("profile_picture")
+  coverPicture          String?  @map("cover_picture")
+  description           String?
+  location              String?
+  followers             Int      @default(0)
+  following             Int      @default(0)
+  canDm                 Boolean  @default(false) @map("can_dm")
+  createdAt             String?  @map("created_at")
+  favouritesCount       Int      @default(0) @map("favourites_count")
+  hasCustomTimelines    Boolean  @default(false) @map("has_custom_timelines")
+  isTranslator          Boolean  @default(false) @map("is_translator")
+  mediaCount            Int      @default(0) @map("media_count")
+  statusesCount         Int      @default(0) @map("statuses_count")
+  possiblySensitive     Boolean  @default(false) @map("possibly_sensitive")
+  isAutomated           Boolean  @default(false) @map("is_automated")
+  automatedBy           String?  @map("automated_by")
+  profileBioDescription String?  @db.Text @map("profile_bio_description")
+  profileBioUrl         String?  @map("profile_bio_url")
+  nextAuthUserId        String?  @unique @map("next_auth_user_id") // Link to NextAuth user
+  createdAtDb           DateTime @default(now()) @map("created_at_db") @db.Timestamptz
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("users")
+  @@index([twitterId])
+  @@index([userName])
+  @@index([nextAuthUserId])
+}
