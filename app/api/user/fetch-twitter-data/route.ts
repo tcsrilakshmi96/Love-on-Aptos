@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/api/auth/[...nextauth]/route";
-import { supabase } from "@/lib/supabase";
+import { prisma } from "@/lib/prisma";
 
-export async function POST(request: NextRequest) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function POST(_request: NextRequest) {
   try {
     // Check authentication
     const session = await auth();
@@ -10,7 +11,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const twitterUsername = (session.user as any)?.username;
+    const twitterUsername = (session.user as { username?: string })?.username;
     if (!twitterUsername) {
       return NextResponse.json({ error: "Twitter username not found" }, { status: 400 });
     }
@@ -51,112 +52,85 @@ export async function POST(request: NextRequest) {
 
     const userData = data.data;
 
-    // Prepare user data for Supabase
+    // Prepare user data for Prisma
     const userRecord = {
-      twitter_id: userData.id,
-      user_name: userData.userName,
+      twitterId: userData.id,
+      userName: userData.userName,
       name: userData.name,
       url: userData.url || null,
-      is_blue_verified: userData.isBlueVerified || false,
-      verified_type: userData.verifiedType || null,
-      profile_picture: userData.profilePicture || null,
-      cover_picture: userData.coverPicture || null,
+      isBlueVerified: userData.isBlueVerified || false,
+      verifiedType: userData.verifiedType || null,
+      profilePicture: userData.profilePicture || null,
+      coverPicture: userData.coverPicture || null,
       description: userData.description || null,
       location: userData.location || null,
       followers: userData.followers || 0,
       following: userData.following || 0,
-      can_dm: userData.canDm || false,
-      created_at: userData.createdAt || null,
-      favourites_count: userData.favouritesCount || 0,
-      has_custom_timelines: userData.hasCustomTimelines || false,
-      is_translator: userData.isTranslator || false,
-      media_count: userData.mediaCount || 0,
-      statuses_count: userData.statusesCount || 0,
-      possibly_sensitive: userData.possiblySensitive || false,
-      is_automated: userData.isAutomated || false,
-      automated_by: userData.automatedBy || null,
-      profile_bio_description: userData.profile_bio?.description || null,
-      profile_bio_url: userData.profile_bio?.entities?.url?.urls?.[0]?.expanded_url || null,
-      next_auth_user_id: (session.user as any)?.id || null,
-      updated_at: new Date().toISOString(),
+      canDm: userData.canDm || false,
+      createdAt: userData.createdAt || null,
+      favouritesCount: userData.favouritesCount || 0,
+      hasCustomTimelines: userData.hasCustomTimelines || false,
+      isTranslator: userData.isTranslator || false,
+      mediaCount: userData.mediaCount || 0,
+      statusesCount: userData.statusesCount || 0,
+      possiblySensitive: userData.possiblySensitive || false,
+      isAutomated: userData.isAutomated || false,
+      automatedBy: userData.automatedBy || null,
+      profileBioDescription: userData.profile_bio?.description || null,
+      profileBioUrl: userData.profile_bio?.entities?.url?.urls?.[0]?.expanded_url || null,
+      nextAuthUserId: (session.user as { id?: string })?.id || null,
     };
 
-    // Check if user exists
-    const { data: existingUser, error: fetchError } = await supabase
-      .from("users")
-      .select("*")
-      .eq("twitter_id", userData.id)
-      .maybeSingle();
+    // Upsert user (create or update)
+    const user = await prisma.user.upsert({
+      where: {
+        twitterId: userData.id,
+      },
+      update: userRecord,
+      create: userRecord,
+    });
 
-    if (fetchError && fetchError.code !== "PGRST116") {
-      throw new Error(`Failed to check existing user: ${fetchError.message}`);
-    }
-
-    let user;
-    if (existingUser) {
-      // Update existing user
-      const { data: updatedUser, error: updateError } = await supabase
-        .from("users")
-        .update(userRecord)
-        .eq("twitter_id", userData.id)
-        .select()
-        .single();
-
-      if (updateError) {
-        throw new Error(`Failed to update user: ${updateError.message}`);
-      }
-      user = updatedUser;
-    } else {
-      // Insert new user
-      const { data: newUser, error: insertError } = await supabase
-        .from("users")
-        .insert(userRecord)
-        .select()
-        .single();
-
-      if (insertError) {
-        throw new Error(`Failed to insert user: ${insertError.message}`);
-      }
-      user = newUser;
-    }
-
-    // Transform back to camelCase for frontend
+    // Transform to camelCase for frontend (already in camelCase from Prisma)
     const transformedUser = {
       id: user.id,
-      twitterId: user.twitter_id,
-      userName: user.user_name,
+      twitterId: user.twitterId,
+      userName: user.userName,
       name: user.name,
       url: user.url,
-      isBlueVerified: user.is_blue_verified,
-      verifiedType: user.verified_type,
-      profilePicture: user.profile_picture,
-      coverPicture: user.cover_picture,
+      isBlueVerified: user.isBlueVerified,
+      verifiedType: user.verifiedType,
+      profilePicture: user.profilePicture,
+      coverPicture: user.coverPicture,
       description: user.description,
       location: user.location,
       followers: user.followers,
       following: user.following,
-      canDm: user.can_dm,
-      createdAt: user.created_at,
-      favouritesCount: user.favourites_count,
-      hasCustomTimelines: user.has_custom_timelines,
-      isTranslator: user.is_translator,
-      mediaCount: user.media_count,
-      statusesCount: user.statuses_count,
-      possiblySensitive: user.possibly_sensitive,
-      isAutomated: user.is_automated,
-      automatedBy: user.automated_by,
-      profileBioDescription: user.profile_bio_description,
-      profileBioUrl: user.profile_bio_url,
-      nextAuthUserId: user.next_auth_user_id,
-      createdAtDb: user.created_at_db,
-      updatedAt: user.updated_at,
+      canDm: user.canDm,
+      createdAt: user.createdAt,
+      favouritesCount: user.favouritesCount,
+      hasCustomTimelines: user.hasCustomTimelines,
+      isTranslator: user.isTranslator,
+      mediaCount: user.mediaCount,
+      statusesCount: user.statusesCount,
+      possiblySensitive: user.possiblySensitive,
+      isAutomated: user.isAutomated,
+      automatedBy: user.automatedBy,
+      profileBioDescription: user.profileBioDescription,
+      profileBioUrl: user.profileBioUrl,
+      nextAuthUserId: user.nextAuthUserId,
+      traits: user.traits,
+      oneLiner: user.oneLiner,
+      summary: user.summary,
+      createdAtDb: user.createdAtDb,
+      updatedAt: user.updatedAt,
     };
 
     return NextResponse.json({ success: true, user: transformedUser });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error fetching Twitter data:", error);
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Internal server error", details: error.message },
+      { error: "Internal server error", details: errorMessage },
       { status: 500 }
     );
   }

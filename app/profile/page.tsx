@@ -1,18 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 
-interface Match {
+interface Tweet {
   id: string;
-  name: string;
-  twitterHandle: string;
-  avatar: string;
-  bio: string;
-  interests: string[];
-  matchScore: number;
+  text: string;
+  url: string;
+  createdAt?: string;
+  retweetCount?: number;
+  replyCount?: number;
+  likeCount?: number;
 }
 
 interface TwitterUserData {
@@ -41,18 +41,23 @@ interface TwitterUserData {
   automatedBy: string | null;
   profileBioDescription: string | null;
   profileBioUrl: string | null;
+  traits: string[];
+  oneLiner: string | null;
+  summary: string | null;
+  tweets?: Tweet[];
 }
 
 export default function ProfilePage() {
   const { data: session, status } = useSession();
-  const [matches, setMatches] = useState<Match[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isFetchingTwitterData, setIsFetchingTwitterData] = useState(false);
   const [twitterUserData, setTwitterUserData] = useState<TwitterUserData | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isGeneratingTraits, setIsGeneratingTraits] = useState(false);
+  const [traitsError, setTraitsError] = useState<string | null>(null);
+  const [userTweets, setUserTweets] = useState<Tweet[]>([]);
   const router = useRouter();
 
-  const fetchTwitterUserData = async () => {
+  const fetchTwitterUserData = useCallback(async () => {
     setIsFetchingTwitterData(true);
     setFetchError(null);
     
@@ -73,11 +78,52 @@ export default function ProfilePage() {
       if (data.success && data.user) {
         setTwitterUserData(data.user);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching Twitter data:", error);
-      setFetchError(error.message || "Failed to fetch Twitter data");
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch Twitter data";
+      setFetchError(errorMessage);
     } finally {
       setIsFetchingTwitterData(false);
+    }
+  }, []);
+
+  const generateTraits = async () => {
+    setIsGeneratingTraits(true);
+    setTraitsError(null);
+    
+    try {
+      const response = await fetch("/api/user/generate-traits", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to generate traits");
+      }
+
+      const data = await response.json();
+      if (data.success && twitterUserData) {
+        // Update local state with new traits and tweets
+        setTwitterUserData({
+          ...twitterUserData,
+          traits: data.traits || [],
+          oneLiner: data.oneLiner || null,
+          summary: data.summary || null,
+        });
+        // Store tweets separately for display
+        if (data.tweets && Array.isArray(data.tweets)) {
+          setUserTweets(data.tweets);
+        }
+      }
+    } catch (error: unknown) {
+      console.error("Error generating traits:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to generate traits";
+      setTraitsError(errorMessage);
+    } finally {
+      setIsGeneratingTraits(false);
     }
   };
 
@@ -91,52 +137,8 @@ export default function ProfilePage() {
     if (status === "authenticated" && session) {
       // Fetch Twitter data
       fetchTwitterUserData();
-      
-      // Simulate loading matches
-      setTimeout(() => {
-        setMatches([
-          {
-            id: "1",
-            name: "Alex",
-            twitterHandle: "@alex_crypto",
-            avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=alex",
-            bio: "Blockchain enthusiast | Love hiking and coffee ☕",
-            interests: ["Crypto", "Hiking", "Coffee", "Tech"],
-            matchScore: 95
-          },
-          {
-            id: "2",
-            name: "Sam",
-            twitterHandle: "@sam_aptos",
-            avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=sam",
-            bio: "Aptos builder | NFT collector | Art lover 🎨",
-            interests: ["Aptos", "NFTs", "Art", "Web3"],
-            matchScore: 88
-          },
-          {
-            id: "3",
-            name: "Jordan",
-            twitterHandle: "@jordan_dev",
-            avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=jordan",
-            bio: "Developer | Gamer | Foodie 🍕",
-            interests: ["Development", "Gaming", "Food", "Travel"],
-            matchScore: 82
-          },
-          {
-            id: "4",
-            name: "Taylor",
-            twitterHandle: "@taylor_web3",
-            avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=taylor",
-            bio: "Web3 advocate | Yoga instructor | Bookworm 📚",
-            interests: ["Web3", "Yoga", "Reading", "Wellness"],
-            matchScore: 79
-          }
-        ]);
-        setIsLoading(false);
-      }, 1000);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router, status, session]);
+  }, [router, status, session, fetchTwitterUserData]);
 
   const handleLogout = async () => {
     await signOut({ callbackUrl: "/" });
@@ -157,23 +159,12 @@ export default function ProfilePage() {
     twitterHandle: `@${twitterUserData.userName}`,
     avatar: twitterUserData.profilePicture || session.user?.image || "",
   } : {
-    username: (session.user as any)?.username || session.user?.name || "User",
-    name: session.user?.name || (session.user as any)?.username || "User",
-    twitterHandle: `@${(session.user as any)?.username || session.user?.name?.toLowerCase().replace(/\s+/g, '') || "user"}`,
+    username: (session.user as { username?: string })?.username || session.user?.name || "User",
+    name: session.user?.name || (session.user as { username?: string })?.username || "User",
+    twitterHandle: `@${(session.user as { username?: string })?.username || session.user?.name?.toLowerCase().replace(/\s+/g, '') || "user"}`,
     avatar: session.user?.image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${session.user?.name || "user"}`,
   };
 
-  const handleLike = (matchId: string) => {
-    setMatches(matches.filter(m => m.id !== matchId));
-    // In production, this would send a like to the backend
-  };
-
-  const handlePass = (matchId: string) => {
-    setMatches(matches.filter(m => m.id !== matchId));
-    // In production, this would send a pass to the backend
-  };
-
-  const currentMatch = matches[0];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900">
@@ -335,7 +326,7 @@ export default function ProfilePage() {
                 </div>
 
                 {/* Additional Info */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-6">
                   {twitterUserData.createdAt && (
                     <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                       <span>📅</span>
@@ -361,6 +352,116 @@ export default function ProfilePage() {
                     </div>
                   )}
                 </div>
+
+                {/* Generate Traits Button */}
+                <div className="mb-6">
+                  <button
+                    onClick={generateTraits}
+                    disabled={isGeneratingTraits}
+                    className="w-full px-6 py-3 rounded-full bg-gradient-to-r from-pink-500 to-purple-500 text-white font-semibold text-lg hover:from-pink-600 hover:to-purple-600 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                  >
+                    {isGeneratingTraits ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        Generating Traits...
+                      </span>
+                    ) : (
+                      "✨ Generate Traits"
+                    )}
+                  </button>
+                  {traitsError && (
+                    <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
+                      <p className="text-red-600 dark:text-red-400 text-sm">{traitsError}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Last 5 Tweets Display */}
+                {userTweets.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">
+                      Recent Tweets
+                    </h3>
+                    <div className="space-y-3">
+                      {userTweets.map((tweet) => (
+                        <div
+                          key={tweet.id}
+                          className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        >
+                          <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed mb-2">
+                            {tweet.text}
+                          </p>
+                          <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                            {tweet.likeCount !== undefined && (
+                              <span>❤️ {tweet.likeCount}</span>
+                            )}
+                            {tweet.retweetCount !== undefined && (
+                              <span>🔄 {tweet.retweetCount}</span>
+                            )}
+                            {tweet.replyCount !== undefined && (
+                              <span>💬 {tweet.replyCount}</span>
+                            )}
+                            {tweet.url && (
+                              <a
+                                href={tweet.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                View Tweet →
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Traits Display - Hidden for now, will show later */}
+                {/* 
+                {twitterUserData && twitterUserData.traits && twitterUserData.traits.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">
+                      Your Traits
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {twitterUserData.traits.map((trait, index) => (
+                        <span
+                          key={index}
+                          className="px-4 py-2 rounded-full bg-gradient-to-r from-pink-100 to-purple-100 dark:from-pink-900/30 dark:to-purple-900/30 text-pink-700 dark:text-pink-300 text-sm font-medium border border-pink-200 dark:border-pink-800"
+                        >
+                          {trait}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                */}
+
+                {/* One Liner Display */}
+                {twitterUserData.oneLiner && (
+                  <div className="mb-6 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                    <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-400 mb-2 uppercase">
+                      One-Liner
+                    </h3>
+                    <p className="text-gray-700 dark:text-gray-300 text-lg italic">
+                      &ldquo;{twitterUserData.oneLiner}&rdquo;
+                    </p>
+                  </div>
+                )}
+
+                {/* Summary Display */}
+                {twitterUserData.summary && (
+                  <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                    <h3 className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 mb-2 uppercase">
+                      Summary
+                    </h3>
+                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                      {twitterUserData.summary}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -392,103 +493,6 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {isLoading ? (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600 mx-auto mb-4"></div>
-              <p className="text-gray-600 dark:text-gray-400">Finding your perfect matches...</p>
-            </div>
-          </div>
-        ) : matches.length === 0 ? (
-          <div className="max-w-md mx-auto text-center py-20">
-            <div className="text-6xl mb-4">💔</div>
-            <h2 className="text-2xl font-bold mb-2 text-gray-800 dark:text-gray-200">No more matches</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Check back later for new potential matches!
-            </p>
-            <Link
-              href="/"
-              className="inline-block px-6 py-3 rounded-full bg-gradient-to-r from-pink-500 to-purple-500 text-white font-semibold hover:from-pink-600 hover:to-purple-600 transition-all"
-            >
-              Go Home
-            </Link>
-          </div>
-        ) : (
-          <div className="max-w-lg mx-auto">
-            {/* Match Card */}
-            <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden border border-pink-200 dark:border-pink-800">
-              {/* Match Score Badge */}
-              <div className="absolute top-4 right-4 z-10">
-                <div className="bg-gradient-to-r from-pink-500 to-purple-500 text-white px-4 py-2 rounded-full font-bold shadow-lg">
-                  {currentMatch.matchScore}% Match
-                </div>
-              </div>
-
-              {/* Profile Image */}
-              <div className="relative h-96 bg-gradient-to-br from-pink-200 to-purple-200 dark:from-pink-900 dark:to-purple-900">
-                <img
-                  src={currentMatch.avatar}
-                  alt={currentMatch.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-
-              {/* Profile Info */}
-              <div className="p-6">
-                <div className="mb-4">
-                  <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-200 mb-1">
-                    {currentMatch.name}
-                  </h2>
-                  <p className="text-purple-600 dark:text-purple-400 font-medium">
-                    {currentMatch.twitterHandle}
-                  </p>
-                </div>
-
-                <p className="text-gray-700 dark:text-gray-300 mb-4 text-lg">
-                  {currentMatch.bio}
-                </p>
-
-                {/* Interests */}
-                <div className="mb-6">
-                  <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase">
-                    Interests
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {currentMatch.interests.map((interest, index) => (
-                      <span
-                        key={index}
-                        className="px-3 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-medium"
-                      >
-                        {interest}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => handlePass(currentMatch.id)}
-                    className="flex-1 px-6 py-4 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 font-semibold text-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all transform hover:scale-105"
-                  >
-                    ✕ Pass
-                  </button>
-                  <button
-                    onClick={() => handleLike(currentMatch.id)}
-                    className="flex-1 px-6 py-4 rounded-full bg-gradient-to-r from-pink-500 to-purple-500 text-white font-semibold text-lg hover:from-pink-600 hover:to-purple-600 transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
-                  >
-                    ♥ Like
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Matches Count */}
-            <div className="mt-6 text-center text-gray-600 dark:text-gray-400">
-              <p>{matches.length - 1} more {matches.length - 1 === 1 ? 'match' : 'matches'} available</p>
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );
