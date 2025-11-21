@@ -7,7 +7,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     TwitterProvider({
       clientId: process.env.TWITTER_CLIENT_ID!,
       clientSecret: process.env.TWITTER_CLIENT_SECRET!,
-      version: "2.0", // Using OAuth 2.0
     }),
   ],
   callbacks: {

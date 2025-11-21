@@ -58,7 +58,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if already matched
-    // @ts-expect-error - Prisma Client types not updated yet, fields exist in DB
     if (currentUser.isMatched || matchUser.isMatched) {
       return NextResponse.json(
         { error: "One or both users are already matched" },
