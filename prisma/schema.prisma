@@ -40,6 +40,9 @@ model User {
   traits                String[] @default([]) // Array of 5 traits from fixed list
   oneLiner              String?  @map("one_liner") // One line description from tweets
   summary               String?  @db.Text // Summary from last 50 tweets
+  tweets                Json?    // Store fetched tweets as JSON array
+  isMatched             Boolean  @default(false) @map("is_matched") // If user has matched with someone
+  matchedWith           String?  @map("matched_with") @db.Uuid // ID of the user they matched with
   createdAtDb           DateTime @default(now()) @map("created_at_db") @db.Timestamptz
   updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz
 

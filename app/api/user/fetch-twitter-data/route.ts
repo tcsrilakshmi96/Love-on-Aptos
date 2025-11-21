@@ -121,6 +121,9 @@ export async function POST(_request: NextRequest) {
       traits: user.traits,
       oneLiner: user.oneLiner,
       summary: user.summary,
+      tweets: user.tweets as any, // Tweets stored as JSON
+      isMatched: user.isMatched,
+      matchedWith: user.matchedWith,
       createdAtDb: user.createdAtDb,
       updatedAt: user.updatedAt,
     };

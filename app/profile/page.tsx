@@ -44,7 +44,9 @@ interface TwitterUserData {
   traits: string[];
   oneLiner: string | null;
   summary: string | null;
-  tweets?: Tweet[];
+  tweets?: Tweet[] | null; // Can be null or array from DB
+  isMatched?: boolean;
+  matchedWith?: string | null;
 }
 
 export default function ProfilePage() {
@@ -77,6 +79,11 @@ export default function ProfilePage() {
       const data = await response.json();
       if (data.success && data.user) {
         setTwitterUserData(data.user);
+        // If user has stored tweets, show random 5
+        if (data.user.tweets && Array.isArray(data.user.tweets) && data.user.tweets.length > 0) {
+          const shuffled = [...data.user.tweets].sort(() => Math.random() - 0.5);
+          setUserTweets(shuffled.slice(0, 5));
+        }
       }
     } catch (error: unknown) {
       console.error("Error fetching Twitter data:", error);
@@ -112,10 +119,15 @@ export default function ProfilePage() {
           traits: data.traits || [],
           oneLiner: data.oneLiner || null,
           summary: data.summary || null,
+          tweets: data.tweets || null,
         });
-        // Store tweets separately for display
+        // Store random tweets for display (from API response or from stored tweets)
         if (data.tweets && Array.isArray(data.tweets)) {
           setUserTweets(data.tweets);
+        } else if (twitterUserData.tweets && Array.isArray(twitterUserData.tweets)) {
+          // If we have stored tweets, show random 5
+          const shuffled = [...twitterUserData.tweets].sort(() => Math.random() - 0.5);
+          setUserTweets(shuffled.slice(0, 5));
         }
       }
     } catch (error: unknown) {
@@ -353,6 +365,27 @@ export default function ProfilePage() {
                   )}
                 </div>
 
+                {/* Matched Status */}
+                {twitterUserData.isMatched && twitterUserData.matchedWith && (
+                  <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-semibold text-green-700 dark:text-green-300 mb-1">
+                          🎉 You&apos;re Matched!
+                        </h3>
+                        <p className="text-green-600 dark:text-green-400 text-sm">
+                          You have a match waiting for you
+                        </p>
+                      </div>
+                      <Link href="/matchmaking">
+                        <button className="px-4 py-2 rounded-full bg-green-600 text-white font-semibold hover:bg-green-700 transition-all">
+                          View Match
+                        </button>
+                      </Link>
+                    </div>
+                  </div>
+                )}
+
                 {/* Generate Traits Button */}
                 <div className="mb-6">
                   <button
@@ -375,6 +408,17 @@ export default function ProfilePage() {
                     </div>
                   )}
                 </div>
+
+                {/* Matchmaking Button */}
+                {twitterUserData.traits && twitterUserData.traits.length > 0 && !twitterUserData.isMatched && (
+                  <div className="mb-6">
+                    <Link href="/matchmaking">
+                      <button className="w-full px-6 py-3 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-semibold text-lg hover:from-purple-600 hover:to-indigo-600 transition-all shadow-lg hover:shadow-xl transform hover:scale-105">
+                        💕 Find Matches
+                      </button>
+                    </Link>
+                  </div>
+                )}
 
                 {/* Last 5 Tweets Display */}
                 {userTweets.length > 0 && (

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/api/auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 // Fixed list of traits
 const AVAILABLE_TRAITS = [
@@ -32,8 +33,101 @@ interface Tweet {
   };
 }
 
-// Analyze tweets and determine traits
-function analyzeTweets(tweets: Tweet[]): Trait[] {
+// Analyze tweets using AI to determine traits via OpenRouter
+async function analyzeTweetsWithAI(tweets: Tweet[]): Promise<Trait[]> {
+  const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (!apiKey) {
+    console.warn("OPENROUTER_API_KEY not found, falling back to keyword-based analysis");
+    return analyzeTweetsFallback(tweets);
+  }
+
+  try {
+    const tweetsText = tweets.map((t) => t.text).join("\n\n");
+    
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+        "X-Title": "Love on Aptos",
+      },
+      body: JSON.stringify({
+        model: "anthropic/claude-3.5-sonnet",
+        messages: [
+          {
+            role: "user",
+            content: `Analyze the following Twitter/X posts and determine the top 5 traits that best describe this person. 
+
+Available traits (you must ONLY use these exact trait names):
+- coder
+- aptos maxi
+- base maxi
+- marketer
+- gm paglu
+- vibecoder
+- ct lead
+- shit poster
+
+Twitter Posts:
+${tweetsText}
+
+Instructions:
+1. Analyze the content, tone, topics, and style of these posts
+2. Select exactly 5 traits from the available list that best match this person
+3. Return ONLY a comma-separated list of the 5 trait names (e.g., "coder, aptos maxi, marketer, vibecoder, ct lead")
+4. Do not include any explanations or additional text, just the 5 traits separated by commas
+
+Traits:`,
+          },
+        ],
+        max_tokens: 100,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+      throw new Error(`OpenRouter API error: ${response.status} - ${JSON.stringify(errorData)}`);
+    }
+
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content?.trim() || "";
+    
+    if (!text) {
+      throw new Error("No response content from OpenRouter API");
+    }
+
+    const traits = text
+      .split(",")
+      .map((t: string) => t.trim().toLowerCase())
+      .filter((t: string): t is Trait => AVAILABLE_TRAITS.includes(t as Trait))
+      .slice(0, 5);
+
+    // Ensure we have exactly 5 traits
+    if (traits.length < 5) {
+      const remaining = AVAILABLE_TRAITS.filter((t: Trait) => !traits.includes(t));
+      traits.push(...remaining.slice(0, 5 - traits.length));
+    }
+
+    return traits.slice(0, 5);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const isAuthError = errorMessage.includes("authentication") || errorMessage.includes("invalid") || errorMessage.includes("401") || errorMessage.includes("unauthorized");
+    
+    if (isAuthError) {
+      console.error("OpenRouter API authentication failed. Please check your OPENROUTER_API_KEY in .env.local");
+      console.error("Error details:", errorMessage);
+    } else {
+      console.error("Error analyzing tweets with AI:", error);
+    }
+    console.warn("Falling back to keyword-based analysis");
+    return analyzeTweetsFallback(tweets);
+  }
+}
+
+// Fallback keyword-based analysis (original implementation)
+function analyzeTweetsFallback(tweets: Tweet[]): Trait[] {
   const traitScores: Record<Trait, number> = {
     "coder": 0,
     "aptos maxi": 0,
@@ -288,7 +382,7 @@ export async function POST(_request: NextRequest) {
       );
     }
 
-    // Fetch tweets (only need 5 tweets)
+    // Fetch tweets (need 10 tweets)
     const tweets: Tweet[] = [];
     
     const url = new URL("https://api.twitterapi.io/twitter/user/last_tweets");
@@ -335,8 +429,8 @@ export async function POST(_request: NextRequest) {
       throw new Error("Invalid response from Twitter API: tweets array not found");
     }
 
-    // Get only the last 5 tweets
-    tweets.push(...apiTweets.slice(0, 5));
+    // Get the last 10 tweets
+    tweets.push(...apiTweets.slice(0, 10));
 
     if (tweets.length === 0) {
       return NextResponse.json(
@@ -345,25 +439,13 @@ export async function POST(_request: NextRequest) {
       );
     }
 
-    // Analyze tweets and generate traits, one-liner, and summary
-    const traits = analyzeTweets(tweets);
+    // Analyze tweets and generate traits using AI, one-liner, and summary
+    const traits = await analyzeTweetsWithAI(tweets);
     const oneLiner = generateOneLiner(tweets);
     const summary = generateSummary(tweets);
 
-    // Update user in database
-    const updatedUser = await prisma.user.update({
-      where: {
-        id: user.id,
-      },
-      data: {
-        traits,
-        oneLiner,
-        summary,
-      },
-    });
-
-    // Format tweets for response (only include needed fields)
-    const formattedTweets = tweets.slice(0, 5).map((tweet) => ({
+    // Format tweets for storage (all 10 tweets)
+    const formattedTweets = tweets.map((tweet) => ({
       id: tweet.id || "",
       text: tweet.text || "",
       url: tweet.url || tweet.twitterUrl || "",
@@ -373,12 +455,29 @@ export async function POST(_request: NextRequest) {
       likeCount: tweet.likeCount,
     }));
 
+    // Update user in database with traits, one-liner, summary, and all tweets
+    const updatedUser = await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        traits,
+        oneLiner,
+        summary,
+        tweets: formattedTweets as Prisma.InputJsonValue, // Store all 10 tweets as JSON
+      } as Prisma.UserUpdateInput,
+    });
+
+    // Return random 5 tweets for display
+    const shuffledTweets = [...formattedTweets].sort(() => Math.random() - 0.5);
+    const randomTweets = shuffledTweets.slice(0, 5);
+
     return NextResponse.json({
       success: true,
       traits: updatedUser.traits,
       oneLiner: updatedUser.oneLiner,
       summary: updatedUser.summary,
-      tweets: formattedTweets, // Return last 5 tweets
+      tweets: randomTweets, // Return random 5 tweets
     });
   } catch (error: unknown) {
     console.error("Error generating traits:", error);
