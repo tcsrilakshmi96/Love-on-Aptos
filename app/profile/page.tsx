@@ -58,6 +58,7 @@ export default function ProfilePage() {
   const [isGeneratingTraits, setIsGeneratingTraits] = useState(false);
   const [traitsError, setTraitsError] = useState<string | null>(null);
   const [userTweets, setUserTweets] = useState<Tweet[]>([]);
+  const [isUnmatching, setIsUnmatching] = useState(false);
   const router = useRouter();
 
   const fetchTwitterUserData = useCallback(async () => {
@@ -155,6 +156,32 @@ export default function ProfilePage() {
 
   const handleLogout = async () => {
     await signOut({ callbackUrl: "/" });
+  };
+
+  const handleUnmatch = async () => {
+    setIsUnmatching(true);
+    try {
+      const response = await fetch("/api/matchmaking/unmatch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to unmatch");
+      }
+
+      // Refresh Twitter data to update matched status
+      await fetchTwitterUserData();
+    } catch (error: unknown) {
+      console.error("Error unmatching:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to unmatch";
+      alert(errorMessage);
+    } finally {
+      setIsUnmatching(false);
+    }
   };
 
   if (status === "loading" || !session) {
@@ -369,7 +396,7 @@ export default function ProfilePage() {
                 {/* Matched Status */}
                 {twitterUserData.isMatched && twitterUserData.matchedWith && (
                   <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                       <div>
                         <h3 className="text-lg font-semibold text-green-700 dark:text-green-300 mb-1">
                           🎉 You&apos;re Matched!
@@ -378,11 +405,20 @@ export default function ProfilePage() {
                           You have a match waiting for you
                         </p>
                       </div>
-                      <Link href="/matchmaking">
-                        <button className="px-4 py-2 rounded-full bg-green-600 text-white font-semibold hover:bg-green-700 transition-all">
-                          View Match
+                      <div className="flex gap-2">
+                        <Link href="/matchmaking">
+                          <button className="px-4 py-2 rounded-full bg-green-600 text-white font-semibold hover:bg-green-700 transition-all">
+                            View Match
+                          </button>
+                        </Link>
+                        <button
+                          onClick={handleUnmatch}
+                          disabled={isUnmatching}
+                          className="px-4 py-2 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-semibold hover:bg-red-200 dark:hover:bg-red-900/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isUnmatching ? "Unmatching..." : "Unmatch"}
                         </button>
-                      </Link>
+                      </div>
                     </div>
                   </div>
                 )}

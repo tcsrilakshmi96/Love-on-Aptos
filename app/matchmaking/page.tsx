@@ -56,6 +56,7 @@ export default function MatchmakingPage() {
   const [selectedMatch, setSelectedMatch] = useState<FullMatchProfile | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<CurrentUserProfile | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
+  const [isUnmatching, setIsUnmatching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchMatches = useCallback(async () => {
@@ -205,6 +206,35 @@ export default function MatchmakingPage() {
     }
   };
 
+  const handleUnmatch = async () => {
+    setIsUnmatching(true);
+    try {
+      const response = await fetch("/api/matchmaking/unmatch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to unmatch");
+      }
+
+      // Clear matched state and refresh to show matchmaking
+      setSelectedMatch(null);
+      setCurrentUserProfile(null);
+      // Fetch potential matches again
+      await fetchMatches();
+    } catch (error: unknown) {
+      console.error("Error unmatching:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to unmatch";
+      setError(errorMessage);
+    } finally {
+      setIsUnmatching(false);
+    }
+  };
+
   if (status === "loading" || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900">
@@ -251,8 +281,8 @@ export default function MatchmakingPage() {
       <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900">
         <nav className="container mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
-            <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
-              💝 Love on Aptos
+            <Link href="/">
+              <Logo className="text-3xl md:text-5xl" />
             </Link>
             <div className="flex items-center gap-4">
               <Link href="/profile">
@@ -478,11 +508,26 @@ export default function MatchmakingPage() {
               </div>
             </div>
 
-            {/* Action Button */}
-            <div className="mt-4 text-center">
+            {/* Action Buttons */}
+            <div className="mt-4 flex gap-3 justify-center">
               <Link href="/profile">
                 <Button className="px-6 py-2 text-sm">Go to Profile</Button>
               </Link>
+              <Button
+                onClick={handleUnmatch}
+                disabled={isUnmatching}
+                variant="outline"
+                className="px-6 py-2 text-sm border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+              >
+                {isUnmatching ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                    Unmatching...
+                  </span>
+                ) : (
+                  "Unmatch"
+                )}
+              </Button>
             </div>
           </div>
         </main>
