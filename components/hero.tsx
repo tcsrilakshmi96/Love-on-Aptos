@@ -24,7 +24,7 @@ export function Hero() {
           <i className="font-light">potential</i> love
         </h1>
         <p className="font-mono text-sm sm:text-base text-foreground/60 text-balance mt-8 max-w-[440px] mx-auto">
-          Love on Aptos — Find your perfect match on the blockchain
+          Love on Aptos — Find your perfect match on X
         </p>
 
         <Link className="contents max-sm:hidden" href={getStartedHref}>
@@ -46,6 +46,22 @@ export function Hero() {
             [Get Started]
           </Button>
         </Link>
+
+        {/* Disclaimer */}
+        <div className="mt-12 max-w-[440px] mx-auto">
+          <p className="font-mono text-xs text-foreground/40 text-center">
+            This is for fun purposes and vibe coding series. Follow{" "}
+            <a
+              href="https://x.com/MoveClubIN"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-foreground/60 hover:text-foreground/80 underline"
+            >
+              @MoveClubIN
+            </a>{" "}
+            for more such builds
+          </p>
+        </div>
       </div>
     </div>
   );
