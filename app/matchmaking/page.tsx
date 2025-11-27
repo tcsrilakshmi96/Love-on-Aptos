@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 
@@ -52,12 +53,13 @@ export default function MatchmakingPage() {
   const [matches, setMatches] = useState<MatchProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
-  const [isAnimating, setIsAnimating] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<FullMatchProfile | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<CurrentUserProfile | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const [isUnmatching, setIsUnmatching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [exitDirection, setExitDirection] = useState<"left" | "right" | null>(null);
+  const [dragX, setDragX] = useState(0);
 
   const fetchMatches = useCallback(async () => {
     setIsLoading(true);
@@ -73,7 +75,13 @@ export default function MatchmakingPage() {
         setMatches(data.matches);
         if (data.matches.length > 0) {
           setCurrentMatchIndex(0);
+        } else {
+          setMatches([]);
+          setCurrentMatchIndex(0);
         }
+      } else {
+        setMatches([]);
+        setCurrentMatchIndex(0);
       }
     } catch (error: unknown) {
       console.error("Error fetching matches:", error);
@@ -121,17 +129,15 @@ export default function MatchmakingPage() {
   const fetchExistingMatch = useCallback(async () => {
     try {
       const response = await fetch("/api/matchmaking/get-match");
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.match) {
-          setSelectedMatch(data.match as FullMatchProfile);
-          // Also fetch current user profile
-          await fetchCurrentUserProfile();
-          setIsLoading(false);
-          return;
-        }
+      const data = await response.json();
+      if (response.ok && data.success && data.match) {
+        setSelectedMatch(data.match as FullMatchProfile);
+        // Also fetch current user profile
+        await fetchCurrentUserProfile();
+        setIsLoading(false);
+        return;
       }
-      // If not matched, fetch potential matches
+      // If not matched (success: false), fetch potential matches
       fetchMatches();
     } catch {
       // If error, try to fetch matches
@@ -150,16 +156,6 @@ export default function MatchmakingPage() {
       fetchExistingMatch();
     }
   }, [router, status, session, fetchExistingMatch]);
-
-  const handleNext = () => {
-    if (currentMatchIndex < matches.length - 1) {
-      setIsAnimating(true);
-      setTimeout(() => {
-        setCurrentMatchIndex(currentMatchIndex + 1);
-        setIsAnimating(false);
-      }, 300);
-    }
-  };
 
   const handleSelectMatch = async () => {
     if (!matches[currentMatchIndex]) return;
@@ -184,6 +180,8 @@ export default function MatchmakingPage() {
       const data = await response.json();
       if (data.success && data.match) {
         setSelectedMatch(data.match as FullMatchProfile);
+        setExitDirection(null);
+        setDragX(0);
         // Also fetch current user profile
         await fetchCurrentUserProfile();
       }
@@ -191,6 +189,8 @@ export default function MatchmakingPage() {
       console.error("Error selecting match:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to select match";
       setError(errorMessage);
+      setExitDirection(null);
+      setDragX(0);
     } finally {
       setIsSelecting(false);
     }
@@ -198,11 +198,15 @@ export default function MatchmakingPage() {
 
   const handlePass = () => {
     if (currentMatchIndex < matches.length - 1) {
-      handleNext();
+      setCurrentMatchIndex(currentMatchIndex + 1);
+      setExitDirection(null);
+      setDragX(0);
     } else {
       // No more matches
       setMatches([]);
       setCurrentMatchIndex(0);
+      setExitDirection(null);
+      setDragX(0);
     }
   };
 
@@ -237,10 +241,10 @@ export default function MatchmakingPage() {
 
   if (status === "loading" || isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900">
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Finding your perfect matches...</p>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-500 mx-auto mb-4"></div>
+          <p className="text-gray-400">Finding your perfect matches...</p>
         </div>
       </div>
     );
@@ -248,24 +252,24 @@ export default function MatchmakingPage() {
 
   if (error && matches.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900">
+      <div className="min-h-screen bg-[#0a0a0a]">
         <nav className="container mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
             <Link href="/">
               <Logo className="text-3xl md:text-5xl" />
             </Link>
             <Link href="/profile">
-              <Button variant="outline">Profile</Button>
+              <Button variant="outline" className="bg-white/10 text-white border-white/20 hover:bg-white/20">Profile</Button>
             </Link>
           </div>
         </nav>
         <main className="container mx-auto px-6 py-8">
           <div className="max-w-md mx-auto text-center py-20">
             <div className="text-6xl mb-4">😔</div>
-            <h2 className="text-2xl font-bold mb-2 text-gray-800 dark:text-gray-200">No matches found</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">{error}</p>
+            <h2 className="text-2xl font-bold mb-2 text-white">No matches found</h2>
+            <p className="text-gray-400 mb-6">{error}</p>
             <Link href="/profile">
-              <Button>Go to Profile</Button>
+              <Button className="bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600">Go to Profile</Button>
             </Link>
           </div>
         </main>
@@ -278,83 +282,54 @@ export default function MatchmakingPage() {
   // Show matched profile
   if (selectedMatch) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900">
-        <nav className="container mx-auto px-6 py-6">
+      <div className="min-h-screen bg-[#0a0a0a]">
+        <nav className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link href="/">
-              <Logo className="text-3xl md:text-5xl" />
+              <Logo className="text-2xl md:text-4xl" />
             </Link>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <Link href="/profile">
-                <Button variant="outline">Profile</Button>
+                <Button variant="outline" className="bg-white/10 text-white border-white/20 hover:bg-white/20 text-sm px-3 py-1.5">Profile</Button>
               </Link>
             </div>
           </div>
         </nav>
 
-        <main className="container mx-auto px-4 py-4">
-          <div className="max-w-6xl mx-auto">
-            {/* Success Animation */}
-            <div className="bg-gradient-to-r from-pink-500 to-purple-500 p-4 rounded-xl shadow-lg mb-4 text-center">
-              <div className="text-4xl mb-2 animate-bounce">🎉</div>
-              <h2 className="text-xl font-bold text-white mb-1">You&apos;re Matched!</h2>
-              <p className="text-white/90 text-sm">
-                {currentUserProfile?.name || "You"} and {selectedMatch.name} are now connected!
-              </p>
-              {selectedMatch.matchingTraits && selectedMatch.matchingTraits.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-white/80 text-xs mb-1">You both share:</p>
-                  <div className="flex flex-wrap justify-center gap-1.5">
-                    {selectedMatch.matchingTraits.map((trait, index) => (
-                      <span
-                        key={index}
-                        className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-medium backdrop-blur-sm"
-                      >
-                        ✨ {trait}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+        <main className="container mx-auto px-4 py-2">
+          <div className="max-w-5xl mx-auto">
 
             {/* Two Profiles Side by Side */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Current User Profile */}
               {currentUserProfile && (
-                <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg overflow-hidden border border-pink-200 dark:border-pink-800">
-                  {/* Cover Picture */}
-                  {currentUserProfile.coverPicture && (
-                    <div className="h-20 w-full bg-gradient-to-br from-pink-200 to-purple-200 dark:from-pink-900 dark:to-purple-900">
-                      <img
-                        src={currentUserProfile.coverPicture}
-                        alt="Cover"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  )}
-
+                <motion.div
+                  initial={{ opacity: 0, x: -50 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5 }}
+                  className="bg-white/5 backdrop-blur-md rounded-xl shadow-2xl overflow-hidden border border-purple-500/20"
+                >
                   <div className="p-4">
                     {/* Profile Header */}
                     <div className="flex flex-col items-center text-center mb-3">
                       <img
                         src={currentUserProfile.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUserProfile.userName}`}
                         alt={currentUserProfile.name}
-                        className="w-16 h-16 rounded-full border-3 border-white dark:border-gray-800 shadow-md -mt-8"
+                        className="w-16 h-16 rounded-xl border-4 border-[#0a0a0a] shadow-xl ring-2 ring-purple-500/30"
                       />
-                      <div className="flex items-center gap-1.5 mt-1.5">
-                        <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <h2 className="text-lg font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
                           {currentUserProfile.name}
                         </h2>
                         {currentUserProfile.isBlueVerified && (
-                          <span className="text-blue-500 text-base">✓</span>
+                          <span className="text-blue-400 text-sm">✓</span>
                         )}
                       </div>
-                      <p className="text-purple-600 dark:text-purple-400 font-medium text-sm">
+                      <p className="text-purple-400 font-medium text-xs">
                         @{currentUserProfile.userName}
                       </p>
                       {currentUserProfile.location && (
-                        <p className="text-gray-600 dark:text-gray-400 text-xs mt-0.5">
+                        <p className="text-gray-400 text-xs mt-0.5">
                           📍 {currentUserProfile.location}
                         </p>
                       )}
@@ -362,8 +337,8 @@ export default function MatchmakingPage() {
 
                     {/* One Liner */}
                     {currentUserProfile.oneLiner && (
-                      <div className="mb-3 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                        <p className="text-gray-700 dark:text-gray-300 text-xs italic text-center line-clamp-2">
+                      <div className="mb-3 p-2 bg-purple-500/10 rounded-lg border border-purple-500/20">
+                        <p className="text-gray-300 text-xs italic text-center line-clamp-2">
                           &ldquo;{currentUserProfile.oneLiner}&rdquo;
                         </p>
                       </div>
@@ -371,18 +346,18 @@ export default function MatchmakingPage() {
 
                     {/* Traits */}
                     {currentUserProfile.traits && currentUserProfile.traits.length > 0 && (
-                      <div className="mb-3">
-                        <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 text-center">
+                      <div>
+                        <h3 className="text-xs font-semibold text-gray-400 mb-2 text-center">
                           Your Traits
                         </h3>
                         <div className="flex flex-wrap gap-1.5 justify-center">
-                          {currentUserProfile.traits.map((trait, index) => (
+                          {currentUserProfile.traits.slice(0, 8).map((trait, index) => (
                             <span
                               key={index}
-                              className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                              className={`px-2 py-0.5 rounded-lg text-xs font-medium ${
                                 selectedMatch.matchingTraits?.includes(trait)
-                                  ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700"
-                                  : "bg-gradient-to-r from-pink-100 to-purple-100 dark:from-pink-900/30 dark:to-purple-900/30 text-pink-700 dark:text-pink-300"
+                                  ? "bg-green-500/20 text-green-300 border border-green-500/30"
+                                  : "bg-purple-500/20 text-purple-300 border border-purple-500/30"
                               }`}
                             >
                               {selectedMatch.matchingTraits?.includes(trait) && "✨ "}
@@ -392,56 +367,38 @@ export default function MatchmakingPage() {
                         </div>
                       </div>
                     )}
-
-                    {/* Summary */}
-                    {currentUserProfile.summary && (
-                      <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
-                        <h3 className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mb-1 uppercase">
-                          Summary
-                        </h3>
-                        <p className="text-gray-700 dark:text-gray-300 text-xs leading-relaxed line-clamp-3">
-                          {currentUserProfile.summary}
-                        </p>
-                      </div>
-                    )}
                   </div>
-                </div>
+                </motion.div>
               )}
 
               {/* Matched User Profile */}
-              <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg overflow-hidden border border-pink-200 dark:border-pink-800">
-                {/* Cover Picture */}
-                {selectedMatch.coverPicture && (
-                  <div className="h-20 w-full bg-gradient-to-br from-pink-200 to-purple-200 dark:from-pink-900 dark:to-purple-900">
-                    <img
-                      src={selectedMatch.coverPicture}
-                      alt="Cover"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                )}
-
+              <motion.div
+                initial={{ opacity: 0, x: 50 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+                className="bg-white/5 backdrop-blur-md rounded-xl shadow-2xl overflow-hidden border border-pink-500/20"
+              >
                 <div className="p-4">
                   {/* Profile Header */}
                   <div className="flex flex-col items-center text-center mb-3">
                     <img
                       src={selectedMatch.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedMatch.userName}`}
                       alt={selectedMatch.name}
-                      className="w-16 h-16 rounded-full border-3 border-white dark:border-gray-800 shadow-md -mt-8"
+                      className="w-16 h-16 rounded-xl border-4 border-[#0a0a0a] shadow-xl ring-2 ring-pink-500/30"
                     />
-                    <div className="flex items-center gap-1.5 mt-1.5">
-                      <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <h2 className="text-lg font-bold bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
                         {selectedMatch.name}
                       </h2>
                       {selectedMatch.isBlueVerified && (
-                        <span className="text-blue-500 text-base">✓</span>
+                        <span className="text-blue-400 text-sm">✓</span>
                       )}
                     </div>
-                    <p className="text-purple-600 dark:text-purple-400 font-medium text-sm">
+                    <p className="text-pink-400 font-medium text-xs">
                       @{selectedMatch.userName}
                     </p>
                     {selectedMatch.location && (
-                      <p className="text-gray-600 dark:text-gray-400 text-xs mt-0.5">
+                      <p className="text-gray-400 text-xs mt-0.5">
                         📍 {selectedMatch.location}
                       </p>
                     )}
@@ -449,8 +406,8 @@ export default function MatchmakingPage() {
 
                   {/* One Liner */}
                   {selectedMatch.oneLiner && (
-                    <div className="mb-3 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                      <p className="text-gray-700 dark:text-gray-300 text-xs italic text-center line-clamp-2">
+                    <div className="mb-3 p-2 bg-pink-500/10 rounded-lg border border-pink-500/20">
+                      <p className="text-gray-300 text-xs italic text-center line-clamp-2">
                         &ldquo;{selectedMatch.oneLiner}&rdquo;
                       </p>
                     </div>
@@ -459,17 +416,17 @@ export default function MatchmakingPage() {
                   {/* Traits */}
                   {selectedMatch.traits && selectedMatch.traits.length > 0 && (
                     <div className="mb-3">
-                      <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 text-center">
+                      <h3 className="text-xs font-semibold text-gray-400 mb-2 text-center">
                         Their Traits
                       </h3>
                       <div className="flex flex-wrap gap-1.5 justify-center">
-                        {selectedMatch.traits.map((trait, index) => (
+                        {selectedMatch.traits.slice(0, 8).map((trait, index) => (
                           <span
                             key={index}
-                            className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            className={`px-2 py-0.5 rounded-lg text-xs font-medium ${
                               selectedMatch.matchingTraits?.includes(trait)
-                                ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700"
-                                : "bg-gradient-to-r from-pink-100 to-purple-100 dark:from-pink-900/30 dark:to-purple-900/30 text-pink-700 dark:text-pink-300"
+                                ? "bg-green-500/20 text-green-300 border border-green-500/30"
+                                : "bg-pink-500/20 text-pink-300 border border-pink-500/30"
                             }`}
                           >
                             {selectedMatch.matchingTraits?.includes(trait) && "✨ "}
@@ -480,18 +437,6 @@ export default function MatchmakingPage() {
                     </div>
                   )}
 
-                  {/* Summary */}
-                  {selectedMatch.summary && (
-                    <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800 mb-3">
-                      <h3 className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mb-1 uppercase">
-                        Summary
-                      </h3>
-                      <p className="text-gray-700 dark:text-gray-300 text-xs leading-relaxed line-clamp-3">
-                        {selectedMatch.summary}
-                      </p>
-                    </div>
-                  )}
-
                   {/* Twitter/X Profile Button */}
                   <a
                     href={`https://x.com/${selectedMatch.userName}`}
@@ -499,36 +444,41 @@ export default function MatchmakingPage() {
                     rel="noopener noreferrer"
                     className="w-full block"
                   >
-                    <Button className="w-full text-xs py-2 bg-black dark:bg-gray-900 hover:bg-gray-800 dark:hover:bg-gray-700 text-white">
+                    <Button className="w-full text-xs py-2 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white">
                       <span className="mr-1.5">𝕏</span>
                       View on X
                     </Button>
                   </a>
                 </div>
-              </div>
+              </motion.div>
             </div>
 
             {/* Action Buttons */}
-            <div className="mt-4 flex gap-3 justify-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+              className="mt-4 flex gap-3 justify-center"
+            >
               <Link href="/profile">
-                <Button className="px-6 py-2 text-sm">Go to Profile</Button>
+                <Button className="px-5 py-2 text-sm bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600">Go to Profile</Button>
               </Link>
               <Button
                 onClick={handleUnmatch}
                 disabled={isUnmatching}
                 variant="outline"
-                className="px-6 py-2 text-sm border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                className="px-5 py-2 text-sm border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20"
               >
                 {isUnmatching ? (
                   <span className="flex items-center justify-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-red-400"></div>
                     Unmatching...
                   </span>
                 ) : (
                   "Unmatch"
                 )}
               </Button>
-            </div>
+            </motion.div>
           </div>
         </main>
       </div>
@@ -538,118 +488,259 @@ export default function MatchmakingPage() {
   // Show matchmaking interface
   if (!currentMatch) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900">
+      <div className="min-h-screen bg-[#0a0a0a]">
         <nav className="container mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
             <Link href="/">
               <Logo className="text-3xl md:text-5xl" />
             </Link>
             <Link href="/profile">
-              <Button variant="outline">Profile</Button>
+              <Button variant="outline" className="bg-white/10 text-white border-white/20 hover:bg-white/20">Profile</Button>
             </Link>
           </div>
         </nav>
         <main className="container mx-auto px-6 py-8">
-          <div className="max-w-md mx-auto text-center py-20">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="max-w-md mx-auto text-center py-20"
+          >
             <div className="text-6xl mb-4">💔</div>
-            <h2 className="text-2xl font-bold mb-2 text-gray-800 dark:text-gray-200">No more matches</h2>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
+            <h2 className="text-2xl font-bold mb-2 text-white">No more matches</h2>
+            <p className="text-gray-400 mb-6">
               Check back later for new potential matches!
             </p>
             <Link href="/profile">
-              <Button>Go to Profile</Button>
+              <Button className="bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600">Go to Profile</Button>
             </Link>
-          </div>
+          </motion.div>
         </main>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900">
+    <div className="min-h-screen bg-[#0a0a0a]">
       {/* Navigation */}
-      <nav className="container mx-auto px-6 py-6">
+      <nav className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
-            💝 Love on Aptos
+          <Link href="/">
+            <Logo className="text-2xl md:text-4xl" />
           </Link>
           <Link href="/profile">
-            <Button variant="outline">Profile</Button>
+            <Button variant="outline" className="bg-white/10 text-white border-white/20 hover:bg-white/20 text-sm px-3 py-1.5">Profile</Button>
           </Link>
         </div>
       </nav>
 
       {/* Main Content */}
-      <main className="container mx-auto px-6 py-8">
-        <div className="max-w-lg mx-auto">
-          {/* Match Card */}
-          <div
-            className={`relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden border border-pink-200 dark:border-pink-800 transition-all duration-300 ${
-              isAnimating ? "opacity-0 scale-95" : "opacity-100 scale-100"
-            }`}
-          >
+      <main className="container mx-auto px-4 py-2">
+        <div className="max-w-md mx-auto">
+          {/* Swipe Instructions */}
+          <div className="text-center mb-3">
+            <p className="text-gray-500 text-xs">
+              Swipe left to pass ← | Swipe right to match →
+            </p>
+          </div>
+
+          {/* Cards Stack Container */}
+          <div className="relative h-[600px]">
+            {/* Card Stack - 3rd card (bottom) */}
+            {matches[currentMatchIndex + 2] && (
+              <motion.div
+                className="absolute inset-0 h-[600px]"
+                initial={false}
+                animate={{
+                  scale: 0.9,
+                  y: 16,
+                  opacity: 0.3,
+                }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="bg-white/5 backdrop-blur-md rounded-xl shadow-xl overflow-hidden border border-purple-500/10 h-full">
+                  <div className="relative h-64 bg-gradient-to-br from-purple-600/20 via-pink-600/20 to-indigo-600/20"></div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Card Stack - 2nd card (middle) */}
+            {matches[currentMatchIndex + 1] && (
+              <motion.div
+                className="absolute inset-0 h-[600px]"
+                initial={false}
+                animate={{
+                  scale: exitDirection ? 0.98 : 0.95,
+                  y: exitDirection ? 4 : 8,
+                  opacity: exitDirection ? 0.8 : 0.5,
+                }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="bg-white/5 backdrop-blur-md rounded-xl shadow-xl overflow-hidden border border-purple-500/15 h-full">
+                  <div className="relative h-64 bg-gradient-to-br from-purple-600/20 via-pink-600/20 to-indigo-600/20 overflow-hidden">
+                    {matches[currentMatchIndex + 1].profilePicture && (
+                      <img
+                        src={matches[currentMatchIndex + 1].profilePicture || ""}
+                        alt="Next match"
+                        className="w-full h-full object-cover blur-2xl scale-110 opacity-30"
+                      />
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Current Match Card (top) */}
+            <AnimatePresence mode="popLayout">
+              <motion.div
+                key={currentMatch.id}
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.9}
+                onDrag={(e, { offset }) => {
+                  setDragX(offset.x);
+                }}
+                onDragEnd={(e, { offset, velocity }) => {
+                  const swipe = offset.x * velocity.x;
+                  const swipeThreshold = 2000;
+
+                  if (swipe < -swipeThreshold || offset.x < -100) {
+                    // Swipe left - Pass
+                    setExitDirection("left");
+                    setTimeout(() => {
+                      handlePass();
+                    }, 300);
+                  } else if (swipe > swipeThreshold || offset.x > 100) {
+                    // Swipe right - Match
+                    setExitDirection("right");
+                    setTimeout(() => {
+                      handleSelectMatch();
+                    }, 300);
+                  } else {
+                    setDragX(0);
+                  }
+                }}
+                initial={{ scale: 0.95, opacity: 0, y: 8 }}
+                animate={{ 
+                  scale: 1, 
+                  opacity: 1, 
+                  y: 0,
+                  x: 0,
+                  rotate: dragX / 20,
+                }}
+                exit={{ 
+                  x: exitDirection === "right" ? 500 : -500,
+                  opacity: 0,
+                  rotate: exitDirection === "right" ? 20 : -20,
+                  transition: { duration: 0.3, ease: "easeOut" }
+                }}
+                transition={{
+                  type: "spring",
+                  stiffness: 300,
+                  damping: 25,
+                }}
+                whileDrag={{ cursor: "grabbing" }}
+                className="absolute inset-0 bg-white/5 backdrop-blur-md rounded-xl shadow-2xl overflow-hidden border border-purple-500/20 select-none h-full"
+                style={{
+                  cursor: "grab",
+                  touchAction: "none",
+                  boxShadow: dragX > 0
+                    ? `0 0 30px rgba(34, 197, 94, ${Math.min(Math.abs(dragX) / 150, 0.5)})`
+                    : dragX < 0
+                    ? `0 0 30px rgba(239, 68, 68, ${Math.min(Math.abs(dragX) / 150, 0.5)})`
+                    : "0 20px 40px -12px rgba(0, 0, 0, 0.3)",
+                }}
+              >
+                {/* Swipe Indicators */}
+                <motion.div
+                  className="absolute top-4 right-4 z-20 pointer-events-none"
+                  animate={{
+                    opacity: Math.max(0, Math.min(1, dragX / 60)),
+                    scale: 0.9 + Math.max(0, Math.min(0.1, dragX / 200)),
+                  }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                >
+                  <div className="bg-green-500/90 backdrop-blur-sm text-white px-3 py-1.5 rounded-lg font-semibold text-sm border-2 border-green-400/50 shadow-lg">
+                    ♥ MATCH
+                  </div>
+                </motion.div>
+                <motion.div
+                  className="absolute top-4 left-4 z-20 pointer-events-none"
+                  animate={{
+                    opacity: Math.max(0, Math.min(1, -dragX / 60)),
+                    scale: 0.9 + Math.max(0, Math.min(0.1, -dragX / 200)),
+                  }}
+                  transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                >
+                  <div className="bg-red-500/90 backdrop-blur-sm text-white px-3 py-1.5 rounded-lg font-semibold text-sm border-2 border-red-400/50 shadow-lg">
+                    ✕ PASS
+                  </div>
+                </motion.div>
+
             {/* Matching Traits Badge */}
             {currentMatch.matchingTraits && currentMatch.matchingTraits.length > 0 && (
-              <div className="absolute top-4 right-4 z-10">
-                <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-4 py-2 rounded-full font-bold shadow-lg text-sm">
+              <div className="absolute top-3 right-3 z-10">
+                <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1.5 rounded-full font-bold shadow-lg text-xs">
                   {currentMatch.matchingTraits.length} Match{currentMatch.matchingTraits.length > 1 ? "es" : ""}
                 </div>
               </div>
             )}
 
             {/* Blurred Profile Image */}
-            <div className="relative h-96 bg-gradient-to-br from-pink-200 to-purple-200 dark:from-pink-900 dark:to-purple-900 overflow-hidden">
+            <div className="relative h-64 bg-gradient-to-br from-purple-600/30 via-pink-600/30 to-indigo-600/30 overflow-hidden">
               {currentMatch.profilePicture ? (
                 <div className="relative w-full h-full">
                   <img
                     src={currentMatch.profilePicture}
                     alt={currentMatch.name}
-                    className="w-full h-full object-cover blur-md scale-110"
+                    className="w-full h-full object-cover blur-3xl scale-125"
                   />
-                  <div className="absolute inset-0 bg-black/30"></div>
+                  <div className="absolute inset-0 bg-black/60"></div>
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-6xl">🔒</div>
+                    <div className="text-5xl drop-shadow-2xl">🔒</div>
                   </div>
                 </div>
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  <div className="text-6xl">👤</div>
+                  <div className="text-5xl">👤</div>
                 </div>
               )}
             </div>
 
             {/* Profile Info */}
-            <div className="p-6">
-              <div className="mb-4">
-                <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-200 mb-1">
+            <div className="p-4">
+              <div className="mb-3">
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent mb-0.5">
                   {currentMatch.name}
                 </h2>
-                <p className="text-purple-600 dark:text-purple-400 font-medium">
+                <p className="text-purple-400 font-medium text-sm">
                   @{currentMatch.userName}
                 </p>
               </div>
 
               {/* One Liner */}
               {currentMatch.oneLiner && (
-                <p className="text-gray-700 dark:text-gray-300 mb-4 text-lg italic">
-                  &ldquo;{currentMatch.oneLiner}&rdquo;
-                </p>
+                <div className="mb-3 p-2.5 bg-pink-500/10 rounded-lg border border-pink-500/20">
+                  <p className="text-gray-300 text-sm italic line-clamp-2">
+                    &ldquo;{currentMatch.oneLiner}&rdquo;
+                  </p>
+                </div>
               )}
 
               {/* Traits */}
               {currentMatch.traits && currentMatch.traits.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase">
+                <div className="mb-3">
+                  <h3 className="text-xs font-semibold text-gray-400 mb-2 uppercase">
                     Traits
                   </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {currentMatch.traits.map((trait, index) => (
+                  <div className="flex flex-wrap gap-1.5">
+                    {currentMatch.traits.slice(0, 6).map((trait, index) => (
                       <span
                         key={index}
-                        className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium ${
                           currentMatch.matchingTraits.includes(trait)
-                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700"
-                            : "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
+                            ? "bg-green-500/20 text-green-300 border border-green-500/30"
+                            : "bg-purple-500/20 text-purple-300 border border-purple-500/30"
                         }`}
                       >
                         {currentMatch.matchingTraits.includes(trait) && "✨ "}
@@ -662,31 +753,32 @@ export default function MatchmakingPage() {
 
               {/* Matching Traits Highlight */}
               {currentMatch.matchingTraits && currentMatch.matchingTraits.length > 0 && (
-                <div className="mb-6 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                  <p className="text-sm text-green-700 dark:text-green-300">
-                    <span className="font-semibold">You both share:</span> {currentMatch.matchingTraits.join(", ")}
+                <div className="mb-3 p-3 bg-green-500/10 rounded-lg border border-green-500/30">
+                  <p className="text-xs text-green-300">
+                    <span className="font-semibold">Shared:</span> {currentMatch.matchingTraits.slice(0, 3).join(", ")}
+                    {currentMatch.matchingTraits.length > 3 && ` +${currentMatch.matchingTraits.length - 3} more`}
                   </p>
                 </div>
               )}
 
               {/* Action Buttons */}
-              <div className="flex gap-4">
+              <div className="flex gap-3">
                 <Button
                   onClick={handlePass}
                   variant="outline"
-                  className="flex-1"
+                  className="flex-1 border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-sm py-2"
                   disabled={isSelecting}
                 >
                   ✕ Pass
                 </Button>
                 <Button
                   onClick={handleSelectMatch}
-                  className="flex-1 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600"
+                  className="flex-1 bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white text-sm py-2"
                   disabled={isSelecting}
                 >
                   {isSelecting ? (
                     <span className="flex items-center justify-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white"></div>
                       Matching...
                     </span>
                   ) : (
@@ -695,15 +787,22 @@ export default function MatchmakingPage() {
                 </Button>
               </div>
             </div>
+          </motion.div>
+            </AnimatePresence>
           </div>
 
           {/* Matches Count */}
-          <div className="mt-6 text-center text-gray-600 dark:text-gray-400">
-            <p>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="mt-4 text-center text-gray-500"
+          >
+            <p className="text-sm">
               {matches.length - currentMatchIndex - 1} more{" "}
               {matches.length - currentMatchIndex - 1 === 1 ? "match" : "matches"} available
             </p>
-          </div>
+          </motion.div>
         </div>
       </main>
     </div>

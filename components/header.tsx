@@ -13,7 +13,7 @@ export const Header = () => {
     <div className="fixed z-50 pt-8 md:pt-14 top-0 left-0 w-full">
       <header className="flex items-center justify-between container">
         <Link href="/">
-          <Logo className="text-3xl md:text-5xl" />
+          <Logo className="text-xl md:text-5xl" />
         </Link>
         
         <Link 

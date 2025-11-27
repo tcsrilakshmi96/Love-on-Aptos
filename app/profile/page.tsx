@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { Logo } from "@/components/logo";
+import ProfileCard from "@/components/profile-card";
 
 interface Tweet {
   id: string;
@@ -60,6 +61,7 @@ export default function ProfilePage() {
   const [userTweets, setUserTweets] = useState<Tweet[]>([]);
   const [isUnmatching, setIsUnmatching] = useState(false);
   const router = useRouter();
+  const hasFetchedRef = useRef(false);
 
   const fetchTwitterUserData = useCallback(async () => {
     setIsFetchingTwitterData(true);
@@ -148,11 +150,17 @@ export default function ProfilePage() {
       return;
     }
 
-    if (status === "authenticated" && session) {
-      // Fetch Twitter data
+    if (status === "authenticated" && session && !hasFetchedRef.current) {
+      // Fetch Twitter data only once
+      hasFetchedRef.current = true;
       fetchTwitterUserData();
     }
   }, [router, status, session, fetchTwitterUserData]);
+
+  const handleRetry = () => {
+    hasFetchedRef.current = false;
+    fetchTwitterUserData();
+  };
 
   const handleLogout = async () => {
     await signOut({ callbackUrl: "/" });
@@ -174,7 +182,9 @@ export default function ProfilePage() {
       }
 
       // Refresh Twitter data to update matched status
+      hasFetchedRef.current = false;
       await fetchTwitterUserData();
+      hasFetchedRef.current = true;
     } catch (error: unknown) {
       console.error("Error unmatching:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to unmatch";
@@ -207,7 +217,7 @@ export default function ProfilePage() {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900">
+    <div className="min-h-screen bg-[#0a0a0a]">
       {/* Navigation */}
       <nav className="container mx-auto px-6 py-6">
         <div className="flex items-center justify-between">
@@ -221,11 +231,11 @@ export default function ProfilePage() {
                 alt={user.username}
                 className="w-10 h-10 rounded-full border-2 border-purple-500"
               />
-              <span className="text-gray-700 dark:text-gray-300 font-medium">{user.twitterHandle}</span>
+              <span className="text-gray-300 font-medium">{user.twitterHandle}</span>
             </div>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-all"
+              className="px-4 py-2 rounded-full bg-white/10 text-white hover:bg-white/20 transition-all border border-white/20"
             >
               Logout
             </button>
@@ -238,13 +248,13 @@ export default function ProfilePage() {
         {/* Loading State - Fetching Twitter Data */}
         {isFetchingTwitterData && (
           <div className="max-w-2xl mx-auto mb-8">
-            <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-pink-200 dark:border-pink-800">
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-purple-500/20">
               <div className="text-center">
-                <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-600 mx-auto mb-4"></div>
-                <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-purple-500 mx-auto mb-4"></div>
+                <h3 className="text-xl font-semibold text-white mb-2">
                   Fetching your Twitter profile...
                 </h3>
-                <p className="text-gray-600 dark:text-gray-400">
+                <p className="text-gray-400">
                   Please wait while we load your profile data
                 </p>
               </div>
@@ -255,16 +265,16 @@ export default function ProfilePage() {
         {/* Error State */}
         {fetchError && !isFetchingTwitterData && (
           <div className="max-w-2xl mx-auto mb-8">
-            <div className="bg-red-50 dark:bg-red-900/20 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-red-200 dark:border-red-800">
+            <div className="bg-red-500/10 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-red-500/30">
               <div className="flex items-center gap-4">
                 <div className="text-2xl">⚠️</div>
                 <div>
-                  <h3 className="text-lg font-semibold text-red-800 dark:text-red-200 mb-1">
+                  <h3 className="text-lg font-semibold text-red-400 mb-1">
                     Error loading profile
                   </h3>
-                  <p className="text-red-600 dark:text-red-400 text-sm">{fetchError}</p>
+                  <p className="text-red-300 text-sm">{fetchError}</p>
                   <button
-                    onClick={fetchTwitterUserData}
+                    onClick={handleRetry}
                     className="mt-3 px-4 py-2 rounded-full bg-red-600 text-white text-sm hover:bg-red-700 transition-all"
                   >
                     Retry
@@ -275,273 +285,72 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* User Profile Section - Full Twitter Data */}
+        {/* User Profile Section - Using ProfileCard Component */}
         {twitterUserData && !isFetchingTwitterData && (
-          <div className="max-w-4xl mx-auto mb-8">
-            <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-pink-200 dark:border-pink-800">
-              {/* Cover Picture */}
-              {twitterUserData.coverPicture && (
-                <div className="h-48 w-full bg-gradient-to-br from-pink-200 to-purple-200 dark:from-pink-900 dark:to-purple-900">
-                  <img
-                    src={twitterUserData.coverPicture}
-                    alt="Cover"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              )}
-              
-              <div className="p-6">
-                {/* Profile Header */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
-                  <img
-                    src={twitterUserData.profilePicture || user.avatar}
-                    alt={twitterUserData.name}
-                    className="w-24 h-24 rounded-full border-4 border-white dark:border-gray-800 shadow-lg -mt-12 sm:-mt-16"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-200">
-                        {twitterUserData.name}
-                      </h2>
-                      {twitterUserData.isBlueVerified && (
-                        <span className="text-blue-500 text-xl">✓</span>
-                      )}
-                    </div>
-                    <p className="text-purple-600 dark:text-purple-400 font-medium text-lg mb-2">
-                      @{twitterUserData.userName}
-                    </p>
-                    {twitterUserData.location && (
-                      <p className="text-gray-600 dark:text-gray-400 text-sm mb-2">
-                        📍 {twitterUserData.location}
-                      </p>
-                    )}
-                    {twitterUserData.url && (
-                      <a
-                        href={twitterUserData.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 text-sm hover:underline"
-                      >
-                        🔗 {twitterUserData.url}
-                      </a>
-                    )}
-                  </div>
-                </div>
+          <div className="max-w-6xl mx-auto space-y-6">
+            {/* Profile Card Component */}
+            <ProfileCard
+              name={twitterUserData.name}
+              username={twitterUserData.userName}
+              bio={twitterUserData.description || twitterUserData.profileBioDescription || undefined}
+              avatarSrc={twitterUserData.profilePicture || user.avatar}
+              coverSrc={twitterUserData.coverPicture || undefined}
+              statusText={twitterUserData.isMatched ? "Matched" : "Not Matched"}
+              statusColor={twitterUserData.isMatched ? "bg-green-500" : "bg-purple-500"}
+              glowText=""
+              traits={twitterUserData.traits || []}
+              oneLiner={twitterUserData.oneLiner || undefined}
+              followers={twitterUserData.followers}
+              following={twitterUserData.following}
+              tweets={twitterUserData.statusesCount}
+              location={twitterUserData.location || undefined}
+              joinedDate={twitterUserData.createdAt ? new Date(twitterUserData.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : undefined}
+              isVerified={twitterUserData.isBlueVerified}
+              isMatched={twitterUserData.isMatched || false}
+              onViewMatch={() => router.push("/matchmaking")}
+              onUnmatch={handleUnmatch}
+              isUnmatching={isUnmatching}
+            />
 
-                {/* Bio */}
-                {(twitterUserData.description || twitterUserData.profileBioDescription) && (
-                  <div className="mb-6">
-                    <p className="text-gray-700 dark:text-gray-300 text-lg leading-relaxed">
-                      {twitterUserData.description || twitterUserData.profileBioDescription}
-                    </p>
-                  </div>
-                )}
-
-                {/* Stats Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-                  <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                      {twitterUserData.followers.toLocaleString()}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Followers</div>
-                  </div>
-                  <div className="bg-pink-50 dark:bg-pink-900/20 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-pink-600 dark:text-pink-400">
-                      {twitterUserData.following.toLocaleString()}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Following</div>
-                  </div>
-                  <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-                      {twitterUserData.statusesCount.toLocaleString()}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Tweets</div>
-                  </div>
-                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                      {twitterUserData.mediaCount.toLocaleString()}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Media</div>
-                  </div>
-                </div>
-
-                {/* Additional Info */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-6">
-                  {twitterUserData.createdAt && (
-                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                      <span>📅</span>
-                      <span>Joined {new Date(twitterUserData.createdAt).toLocaleDateString()}</span>
-                    </div>
-                  )}
-                  {twitterUserData.favouritesCount > 0 && (
-                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                      <span>❤️</span>
-                      <span>{twitterUserData.favouritesCount.toLocaleString()} Likes</span>
-                    </div>
-                  )}
-                  {twitterUserData.isTranslator && (
-                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                      <span>🌐</span>
-                      <span>Translator</span>
-                    </div>
-                  )}
-                  {twitterUserData.canDm && (
-                    <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                      <span>💬</span>
-                      <span>DMs Open</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Matched Status */}
-                {twitterUserData.isMatched && twitterUserData.matchedWith && (
-                  <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                      <div>
-                        <h3 className="text-lg font-semibold text-green-700 dark:text-green-300 mb-1">
-                          🎉 You&apos;re Matched!
-                        </h3>
-                        <p className="text-green-600 dark:text-green-400 text-sm">
-                          You have a match waiting for you
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <Link href="/matchmaking">
-                          <button className="px-4 py-2 rounded-full bg-green-600 text-white font-semibold hover:bg-green-700 transition-all">
-                            View Match
-                          </button>
-                        </Link>
-                        <button
-                          onClick={handleUnmatch}
-                          disabled={isUnmatching}
-                          className="px-4 py-2 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-semibold hover:bg-red-200 dark:hover:bg-red-900/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isUnmatching ? "Unmatching..." : "Unmatch"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Generate Traits Button */}
-                <div className="mb-6">
+            {/* Action Buttons */}
+            <div className="max-w-5xl mx-auto space-y-3">
+              {/* Generate Traits Button - Only show if no traits */}
+              {(!twitterUserData.traits || twitterUserData.traits.length === 0) && (
+                <div>
                   <button
                     onClick={generateTraits}
                     disabled={isGeneratingTraits}
-                    className="w-full px-6 py-3 rounded-full bg-gradient-to-r from-pink-500 to-purple-500 text-white font-semibold text-lg hover:from-pink-600 hover:to-purple-600 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    className="w-full px-6 py-3 rounded-2xl bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 text-white font-bold text-base hover:from-pink-600 hover:via-purple-600 hover:to-indigo-600 transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isGeneratingTraits ? (
-                      <span className="flex items-center justify-center gap-2">
+                      <span className="flex items-center justify-center gap-3">
                         <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                         Generating Traits...
                       </span>
                     ) : (
-                      "✨ Generate Traits"
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="text-xl">✨</span>
+                        Generate Traits
+                      </span>
                     )}
                   </button>
                   {traitsError && (
-                    <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                      <p className="text-red-600 dark:text-red-400 text-sm">{traitsError}</p>
-                    </div>
+                    <p className="mt-3 text-sm text-red-400 text-center">{traitsError}</p>
                   )}
                 </div>
+              )}
 
-                {/* Matchmaking Button */}
-                {twitterUserData.traits && twitterUserData.traits.length > 0 && !twitterUserData.isMatched && (
-                  <div className="mb-6">
-                    <Link href="/matchmaking">
-                      <button className="w-full px-6 py-3 rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-semibold text-lg hover:from-purple-600 hover:to-indigo-600 transition-all shadow-lg hover:shadow-xl transform hover:scale-105">
-                        💕 Find Matches
-                      </button>
-                    </Link>
-                  </div>
-                )}
-
-                {/* Last 5 Tweets Display */}
-                {userTweets.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">
-                      Recent Tweets
-                    </h3>
-                    <div className="space-y-3">
-                      {userTweets.map((tweet) => (
-                        <div
-                          key={tweet.id}
-                          className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                        >
-                          <p className="text-gray-700 dark:text-gray-300 text-sm leading-relaxed mb-2">
-                            {tweet.text}
-                          </p>
-                          <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                            {tweet.likeCount !== undefined && (
-                              <span>❤️ {tweet.likeCount}</span>
-                            )}
-                            {tweet.retweetCount !== undefined && (
-                              <span>🔄 {tweet.retweetCount}</span>
-                            )}
-                            {tweet.replyCount !== undefined && (
-                              <span>💬 {tweet.replyCount}</span>
-                            )}
-                            {tweet.url && (
-                              <a
-                                href={tweet.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 dark:text-blue-400 hover:underline"
-                              >
-                                View Tweet →
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Traits Display */}
-                {twitterUserData && twitterUserData.traits && twitterUserData.traits.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">
-                      Your Traits
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                      {twitterUserData.traits.map((trait, index) => (
-                        <span
-                          key={index}
-                          className="px-4 py-2 rounded-full bg-gradient-to-r from-pink-100 to-purple-100 dark:from-pink-900/30 dark:to-purple-900/30 text-pink-700 dark:text-pink-300 text-sm font-medium border border-pink-200 dark:border-pink-800"
-                        >
-                          {trait}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* One Liner Display */}
-                {twitterUserData.oneLiner && (
-                  <div className="mb-6 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                    <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-400 mb-2 uppercase">
-                      One-Liner
-                    </h3>
-                    <p className="text-gray-700 dark:text-gray-300 text-lg italic">
-                      &ldquo;{twitterUserData.oneLiner}&rdquo;
-                    </p>
-                  </div>
-                )}
-
-                {/* Summary Display */}
-                {twitterUserData.summary && (
-                  <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
-                    <h3 className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 mb-2 uppercase">
-                      Summary
-                    </h3>
-                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                      {twitterUserData.summary}
-                    </p>
-                  </div>
-                )}
-              </div>
+              {/* Find Matches Button */}
+              {twitterUserData.traits && twitterUserData.traits.length > 0 && !twitterUserData.isMatched && (
+                <Link href="/matchmaking">
+                  <button className="w-full px-6 py-3 rounded-2xl bg-gradient-to-r from-purple-500 via-pink-500 to-rose-500 text-white font-bold text-base hover:from-purple-600 hover:via-pink-600 hover:to-rose-600 transition-all shadow-xl">
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="text-xl">💕</span>
+                      Find Your Match
+                    </span>
+                  </button>
+                </Link>
+              )}
             </div>
           </div>
         )}
@@ -549,7 +358,7 @@ export default function ProfilePage() {
         {/* Fallback Profile Section (if Twitter data not loaded) */}
         {!twitterUserData && !isFetchingTwitterData && !fetchError && (
           <div className="max-w-2xl mx-auto mb-8">
-            <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-pink-200 dark:border-pink-800">
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-purple-500/20">
               <div className="flex items-center gap-4">
                 <img
                   src={user.avatar}
@@ -557,13 +366,13 @@ export default function ProfilePage() {
                   className="w-20 h-20 rounded-full border-4 border-purple-500 shadow-lg"
                 />
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
+                  <h2 className="text-2xl font-bold text-white">
                     {user.name}
                   </h2>
-                  <p className="text-purple-600 dark:text-purple-400 font-medium">
+                  <p className="text-purple-400 font-medium">
                     {user.twitterHandle}
                   </p>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  <p className="text-sm text-gray-400 mt-1">
                     Your Profile
                   </p>
                 </div>

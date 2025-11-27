@@ -36,8 +36,8 @@ export async function GET(_request: NextRequest) {
     // Check if user is matched
     if (!currentUser.isMatched || !currentUser.matchedWith) {
       return NextResponse.json(
-        { error: "User is not matched" },
-        { status: 400 }
+        { success: false, message: "User is not matched" },
+        { status: 200 }
       );
     }
 
