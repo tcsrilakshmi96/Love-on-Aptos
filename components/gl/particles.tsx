@@ -41,7 +41,7 @@ export function Particles({
   // Reveal animation state
   const revealStartTime = useRef<number | null>(null);
   const [isRevealing, setIsRevealing] = useState(true);
-  const revealDuration = 3.5; // seconds
+  const revealDuration = 2.0; // seconds - faster reveal
   // Create simulation material with scale parameter
   const simulationMaterial = useMemo(() => {
     return new SimulationMaterial(planeScale);
@@ -112,7 +112,7 @@ export function Particles({
 
     // Map progress to reveal factor (0 = fully hidden, higher values = more revealed)
     // We want to start from center (0) and expand outward (higher values)
-    const revealFactor = easedProgress * 4.0; // Doubled the radius for larger coverage
+    const revealFactor = easedProgress * 6.0; // Increased radius for better coverage
 
     if (revealProgress >= 1.0 && isRevealing) {
       setIsRevealing(false);

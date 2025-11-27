@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/logo";
 
 interface MatchProfile {
   id: string;
@@ -28,6 +29,23 @@ interface FullMatchProfile extends MatchProfile {
   url: string | null;
 }
 
+interface CurrentUserProfile {
+  id: string;
+  name: string;
+  userName: string;
+  profilePicture: string | null;
+  coverPicture: string | null;
+  description: string | null;
+  location: string | null;
+  followers: number;
+  following: number;
+  traits: string[];
+  oneLiner: string | null;
+  summary: string | null;
+  isBlueVerified: boolean;
+  url: string | null;
+}
+
 export default function MatchmakingPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -36,6 +54,7 @@ export default function MatchmakingPage() {
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<FullMatchProfile | null>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<CurrentUserProfile | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,6 +83,40 @@ export default function MatchmakingPage() {
     }
   }, []);
 
+  const fetchCurrentUserProfile = useCallback(async () => {
+    try {
+      const response = await fetch("/api/user/fetch-twitter-data", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.user) {
+          setCurrentUserProfile({
+            id: data.user.id,
+            name: data.user.name,
+            userName: data.user.userName,
+            profilePicture: data.user.profilePicture,
+            coverPicture: data.user.coverPicture,
+            description: data.user.description,
+            location: data.user.location,
+            followers: data.user.followers,
+            following: data.user.following,
+            traits: data.user.traits || [],
+            oneLiner: data.user.oneLiner,
+            summary: data.user.summary,
+            isBlueVerified: data.user.isBlueVerified,
+            url: data.user.url,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching current user profile:", error);
+    }
+  }, []);
+
   const fetchExistingMatch = useCallback(async () => {
     try {
       const response = await fetch("/api/matchmaking/get-match");
@@ -71,6 +124,8 @@ export default function MatchmakingPage() {
         const data = await response.json();
         if (data.success && data.match) {
           setSelectedMatch(data.match as FullMatchProfile);
+          // Also fetch current user profile
+          await fetchCurrentUserProfile();
           setIsLoading(false);
           return;
         }
@@ -81,7 +136,7 @@ export default function MatchmakingPage() {
       // If error, try to fetch matches
       fetchMatches();
     }
-  }, [fetchMatches]);
+  }, [fetchMatches, fetchCurrentUserProfile]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -128,6 +183,8 @@ export default function MatchmakingPage() {
       const data = await response.json();
       if (data.success && data.match) {
         setSelectedMatch(data.match as FullMatchProfile);
+        // Also fetch current user profile
+        await fetchCurrentUserProfile();
       }
     } catch (error: unknown) {
       console.error("Error selecting match:", error);
@@ -164,8 +221,8 @@ export default function MatchmakingPage() {
       <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900">
         <nav className="container mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
-            <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
-              💝 Love on Aptos
+            <Link href="/">
+              <Logo className="text-3xl md:text-5xl" />
             </Link>
             <Link href="/profile">
               <Button variant="outline">Profile</Button>
@@ -205,136 +262,227 @@ export default function MatchmakingPage() {
           </div>
         </nav>
 
-        <main className="container mx-auto px-6 py-8">
-          <div className="max-w-2xl mx-auto">
-            <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-pink-200 dark:border-pink-800">
-              {/* Success Animation */}
-              <div className="bg-gradient-to-r from-pink-500 to-purple-500 p-8 text-center">
-                <div className="text-6xl mb-4 animate-bounce">🎉</div>
-                <h2 className="text-3xl font-bold text-white mb-2">You&apos;re Matched!</h2>
-                <p className="text-white/90">You and {selectedMatch.name} are now connected!</p>
-              </div>
+        <main className="container mx-auto px-4 py-4">
+          <div className="max-w-6xl mx-auto">
+            {/* Success Animation */}
+            <div className="bg-gradient-to-r from-pink-500 to-purple-500 p-4 rounded-xl shadow-lg mb-4 text-center">
+              <div className="text-4xl mb-2 animate-bounce">🎉</div>
+              <h2 className="text-xl font-bold text-white mb-1">You&apos;re Matched!</h2>
+              <p className="text-white/90 text-sm">
+                {currentUserProfile?.name || "You"} and {selectedMatch.name} are now connected!
+              </p>
+              {selectedMatch.matchingTraits && selectedMatch.matchingTraits.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-white/80 text-xs mb-1">You both share:</p>
+                  <div className="flex flex-wrap justify-center gap-1.5">
+                    {selectedMatch.matchingTraits.map((trait, index) => (
+                      <span
+                        key={index}
+                        className="px-2 py-0.5 rounded-full bg-white/20 text-white text-xs font-medium backdrop-blur-sm"
+                      >
+                        ✨ {trait}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
-              {/* Cover Picture */}
-              {selectedMatch.coverPicture && (
-                <div className="h-48 w-full bg-gradient-to-br from-pink-200 to-purple-200 dark:from-pink-900 dark:to-purple-900">
-                  <img
-                    src={selectedMatch.coverPicture}
-                    alt="Cover"
-                    className="w-full h-full object-cover"
-                  />
+            {/* Two Profiles Side by Side */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Current User Profile */}
+              {currentUserProfile && (
+                <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg overflow-hidden border border-pink-200 dark:border-pink-800">
+                  {/* Cover Picture */}
+                  {currentUserProfile.coverPicture && (
+                    <div className="h-20 w-full bg-gradient-to-br from-pink-200 to-purple-200 dark:from-pink-900 dark:to-purple-900">
+                      <img
+                        src={currentUserProfile.coverPicture}
+                        alt="Cover"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+
+                  <div className="p-4">
+                    {/* Profile Header */}
+                    <div className="flex flex-col items-center text-center mb-3">
+                      <img
+                        src={currentUserProfile.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUserProfile.userName}`}
+                        alt={currentUserProfile.name}
+                        className="w-16 h-16 rounded-full border-3 border-white dark:border-gray-800 shadow-md -mt-8"
+                      />
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">
+                          {currentUserProfile.name}
+                        </h2>
+                        {currentUserProfile.isBlueVerified && (
+                          <span className="text-blue-500 text-base">✓</span>
+                        )}
+                      </div>
+                      <p className="text-purple-600 dark:text-purple-400 font-medium text-sm">
+                        @{currentUserProfile.userName}
+                      </p>
+                      {currentUserProfile.location && (
+                        <p className="text-gray-600 dark:text-gray-400 text-xs mt-0.5">
+                          📍 {currentUserProfile.location}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* One Liner */}
+                    {currentUserProfile.oneLiner && (
+                      <div className="mb-3 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                        <p className="text-gray-700 dark:text-gray-300 text-xs italic text-center line-clamp-2">
+                          &ldquo;{currentUserProfile.oneLiner}&rdquo;
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Traits */}
+                    {currentUserProfile.traits && currentUserProfile.traits.length > 0 && (
+                      <div className="mb-3">
+                        <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 text-center">
+                          Your Traits
+                        </h3>
+                        <div className="flex flex-wrap gap-1.5 justify-center">
+                          {currentUserProfile.traits.map((trait, index) => (
+                            <span
+                              key={index}
+                              className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                selectedMatch.matchingTraits?.includes(trait)
+                                  ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700"
+                                  : "bg-gradient-to-r from-pink-100 to-purple-100 dark:from-pink-900/30 dark:to-purple-900/30 text-pink-700 dark:text-pink-300"
+                              }`}
+                            >
+                              {selectedMatch.matchingTraits?.includes(trait) && "✨ "}
+                              {trait}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Summary */}
+                    {currentUserProfile.summary && (
+                      <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                        <h3 className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mb-1 uppercase">
+                          Summary
+                        </h3>
+                        <p className="text-gray-700 dark:text-gray-300 text-xs leading-relaxed line-clamp-3">
+                          {currentUserProfile.summary}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
-              <div className="p-6">
-                {/* Profile Header */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
-                  <img
-                    src={selectedMatch.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedMatch.userName}`}
-                    alt={selectedMatch.name}
-                    className="w-24 h-24 rounded-full border-4 border-white dark:border-gray-800 shadow-lg -mt-12 sm:-mt-16"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-200">
+              {/* Matched User Profile */}
+              <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg overflow-hidden border border-pink-200 dark:border-pink-800">
+                {/* Cover Picture */}
+                {selectedMatch.coverPicture && (
+                  <div className="h-20 w-full bg-gradient-to-br from-pink-200 to-purple-200 dark:from-pink-900 dark:to-purple-900">
+                    <img
+                      src={selectedMatch.coverPicture}
+                      alt="Cover"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+
+                <div className="p-4">
+                  {/* Profile Header */}
+                  <div className="flex flex-col items-center text-center mb-3">
+                    <img
+                      src={selectedMatch.profilePicture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedMatch.userName}`}
+                      alt={selectedMatch.name}
+                      className="w-16 h-16 rounded-full border-3 border-white dark:border-gray-800 shadow-md -mt-8"
+                    />
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">
                         {selectedMatch.name}
                       </h2>
                       {selectedMatch.isBlueVerified && (
-                        <span className="text-blue-500 text-xl">✓</span>
+                        <span className="text-blue-500 text-base">✓</span>
                       )}
                     </div>
-                    <p className="text-purple-600 dark:text-purple-400 font-medium text-lg mb-2">
+                    <p className="text-purple-600 dark:text-purple-400 font-medium text-sm">
                       @{selectedMatch.userName}
                     </p>
                     {selectedMatch.location && (
-                      <p className="text-gray-600 dark:text-gray-400 text-sm mb-2">
+                      <p className="text-gray-600 dark:text-gray-400 text-xs mt-0.5">
                         📍 {selectedMatch.location}
                       </p>
                     )}
                   </div>
-                </div>
 
-                {/* One Liner */}
-                {selectedMatch.oneLiner && (
-                  <div className="mb-6 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
-                    <p className="text-gray-700 dark:text-gray-300 text-lg italic">
-                      &ldquo;{selectedMatch.oneLiner}&rdquo;
-                    </p>
-                  </div>
-                )}
-
-                {/* Traits */}
-                {selectedMatch.traits && selectedMatch.traits.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">
-                      Traits
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedMatch.traits.map((trait, index) => (
-                        <span
-                          key={index}
-                          className="px-4 py-2 rounded-full bg-gradient-to-r from-pink-100 to-purple-100 dark:from-pink-900/30 dark:to-purple-900/30 text-pink-700 dark:text-pink-300 text-sm font-medium border border-pink-200 dark:border-pink-800"
-                        >
-                          {trait}
-                        </span>
-                      ))}
+                  {/* One Liner */}
+                  {selectedMatch.oneLiner && (
+                    <div className="mb-3 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                      <p className="text-gray-700 dark:text-gray-300 text-xs italic text-center line-clamp-2">
+                        &ldquo;{selectedMatch.oneLiner}&rdquo;
+                      </p>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Matching Traits */}
-                {selectedMatch.matchingTraits && selectedMatch.matchingTraits.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-400 mb-2 uppercase">
-                      Matching Traits
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedMatch.matchingTraits.map((trait, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 text-sm font-medium"
-                        >
-                          ✨ {trait}
-                        </span>
-                      ))}
+                  {/* Traits */}
+                  {selectedMatch.traits && selectedMatch.traits.length > 0 && (
+                    <div className="mb-3">
+                      <h3 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5 text-center">
+                        Their Traits
+                      </h3>
+                      <div className="flex flex-wrap gap-1.5 justify-center">
+                        {selectedMatch.traits.map((trait, index) => (
+                          <span
+                            key={index}
+                            className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                              selectedMatch.matchingTraits?.includes(trait)
+                                ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700"
+                                : "bg-gradient-to-r from-pink-100 to-purple-100 dark:from-pink-900/30 dark:to-purple-900/30 text-pink-700 dark:text-pink-300"
+                            }`}
+                          >
+                            {selectedMatch.matchingTraits?.includes(trait) && "✨ "}
+                            {trait}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Summary */}
-                {selectedMatch.summary && (
-                  <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800 mb-6">
-                    <h3 className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 mb-2 uppercase">
-                      Summary
-                    </h3>
-                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                      {selectedMatch.summary}
-                    </p>
-                  </div>
-                )}
-
-                {/* Stats */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                      {selectedMatch.followers.toLocaleString()}
+                  {/* Summary */}
+                  {selectedMatch.summary && (
+                    <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800 mb-3">
+                      <h3 className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mb-1 uppercase">
+                        Summary
+                      </h3>
+                      <p className="text-gray-700 dark:text-gray-300 text-xs leading-relaxed line-clamp-3">
+                        {selectedMatch.summary}
+                      </p>
                     </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Followers</div>
-                  </div>
-                  <div className="bg-pink-50 dark:bg-pink-900/20 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-bold text-pink-600 dark:text-pink-400">
-                      {selectedMatch.following.toLocaleString()}
-                    </div>
-                    <div className="text-sm text-gray-600 dark:text-gray-400">Following</div>
-                  </div>
-                </div>
+                  )}
 
-                <div className="flex gap-4">
-                  <Link href="/profile" className="flex-1">
-                    <Button className="w-full">Go to Profile</Button>
-                  </Link>
+                  {/* Twitter/X Profile Button */}
+                  <a
+                    href={`https://x.com/${selectedMatch.userName}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full block"
+                  >
+                    <Button className="w-full text-xs py-2 bg-black dark:bg-gray-900 hover:bg-gray-800 dark:hover:bg-gray-700 text-white">
+                      <span className="mr-1.5">𝕏</span>
+                      View on X
+                    </Button>
+                  </a>
                 </div>
               </div>
+            </div>
+
+            {/* Action Button */}
+            <div className="mt-4 text-center">
+              <Link href="/profile">
+                <Button className="px-6 py-2 text-sm">Go to Profile</Button>
+              </Link>
             </div>
           </div>
         </main>
@@ -348,8 +496,8 @@ export default function MatchmakingPage() {
       <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-indigo-50 dark:from-gray-900 dark:via-purple-900 dark:to-indigo-900">
         <nav className="container mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
-            <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
-              💝 Love on Aptos
+            <Link href="/">
+              <Logo className="text-3xl md:text-5xl" />
             </Link>
             <Link href="/profile">
               <Button variant="outline">Profile</Button>

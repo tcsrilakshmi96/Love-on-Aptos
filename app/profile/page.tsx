@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
+import { Logo } from "@/components/logo";
 
 interface Tweet {
   id: string;
@@ -183,8 +184,8 @@ export default function ProfilePage() {
       {/* Navigation */}
       <nav className="container mx-auto px-6 py-6">
         <div className="flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
-            💝 Love on Aptos
+          <Link href="/">
+            <Logo className="text-3xl md:text-5xl" />
           </Link>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -462,8 +463,7 @@ export default function ProfilePage() {
                   </div>
                 )}
 
-                {/* Traits Display - Hidden for now, will show later */}
-                {/* 
+                {/* Traits Display */}
                 {twitterUserData && twitterUserData.traits && twitterUserData.traits.length > 0 && (
                   <div className="mb-6">
                     <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">
@@ -481,7 +481,6 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 )}
-                */}
 
                 {/* One Liner Display */}
                 {twitterUserData.oneLiner && (
