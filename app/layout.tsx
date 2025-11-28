@@ -15,8 +15,25 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Love on Aptos - Find Your Perfect Match",
-  description: "Connect with like-minded souls on the Aptos blockchain. Secure, transparent, and built for meaningful connections.",
+  title: "Find Your Love ❤️",
+  description: "Find your perfect match on X. Connect with like minded souls.",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://love-on-aptos.vercel.app"),
+  openGraph: {
+    title: "Find Your Perfect Match ❤️",
+    description: "Find your love on X. Match with people who share your vibe.",
+    siteName: "Find Your Perfect Match",
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Find Your Perfect Match ❤️",
+    description: "Find your love on X. Match with people who share your vibe.",
+    creator: "@MoveClubIN",
+  },
+  other: {
+    "telegram:channel": "@MoveClubIN",
+  },
 };
 
 export default function RootLayout({
