@@ -25,12 +25,21 @@ export const metadata: Metadata = {
     siteName: "Find Your Perfect Match",
     locale: "en_US",
     type: "website",
+    images: [
+      {
+        url: "/api/og",
+        width: 1200,
+        height: 630,
+        alt: "Find Your Perfect Match on X",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Find Your Perfect Match ❤️",
     description: "Find your love on X. Match with people who share your vibe.",
     creator: "@MoveClubIN",
+    images: ["/api/og"],
   },
   other: {
     "telegram:channel": "@MoveClubIN",
