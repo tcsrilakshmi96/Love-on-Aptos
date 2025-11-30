@@ -13,6 +13,8 @@ const AVAILABLE_TRAITS = [
   "vibecoder",
   "ct lead",
   "shit poster",
+  "solana maxi",
+  "ibw paglu",
 ] as const;
 
 type Trait = typeof AVAILABLE_TRAITS[number];
@@ -137,6 +139,8 @@ function analyzeTweetsFallback(tweets: Tweet[]): Trait[] {
     "vibecoder": 0,
     "ct lead": 0,
     "shit poster": 0,
+    "solana maxi": 0,
+    "ibw paglu": 0,
   };
 
   const allText = tweets.map((t) => t.text.toLowerCase()).join(" ");
